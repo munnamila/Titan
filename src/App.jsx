@@ -22,7 +22,8 @@ export default function App() {
   const [habits, setHabits] = useState([])
   const [records, setRecords] = useState({})
   const [newName, setNewName] = useState('')
-  const [tab, setTab] = useState('today') // 'today' | 'history'
+  const [newScore, setNewScore] = useState('')
+  const [tab, setTab] = useState('today')
 
   useEffect(() => {
     const { habits, records } = loadData()
@@ -31,6 +32,10 @@ export default function App() {
   }, [])
 
   const todayCheckins = records[TODAY] || []
+
+  const todayScore = habits
+    .filter(h => todayCheckins.includes(h.id))
+    .reduce((sum, h) => sum + (h.score || 0), 0)
 
   function toggle(id) {
     const current = records[TODAY] || []
@@ -44,11 +49,13 @@ export default function App() {
 
   function addHabit() {
     const name = newName.trim()
+    const score = parseInt(newScore) || 1
     if (!name) return
-    const updated = [...habits, { id: Date.now().toString(), name }]
+    const updated = [...habits, { id: Date.now().toString(), name, score }]
     setHabits(updated)
     saveHabits(updated)
     setNewName('')
+    setNewScore('')
   }
 
   function deleteHabit(id) {
@@ -58,13 +65,16 @@ export default function App() {
     saveHabits(updated)
   }
 
-  // 历史记录，按日期降序
+  const habitMap = Object.fromEntries(habits.map(h => [h.id, h]))
+
   const historyDays = Object.keys(records)
     .sort((a, b) => b.localeCompare(a))
-    .map(date => ({ date, ids: records[date] }))
+    .map(date => {
+      const ids = records[date]
+      const score = ids.reduce((sum, id) => sum + (habitMap[id]?.score || 0), 0)
+      return { date, ids, score }
+    })
     .filter(d => d.ids.length > 0)
-
-  const habitMap = Object.fromEntries(habits.map(h => [h.id, h.name]))
 
   return (
     <div className="app">
@@ -79,6 +89,7 @@ export default function App() {
       {tab === 'today' && (
         <main>
           <p className="date">{TODAY}</p>
+          <div className="score-banner">今日得分 <strong>{todayScore}</strong></div>
           <ul className="habit-list">
             {habits.length === 0 && <li className="empty">还没有打卡项目，添加一个吧</li>}
             {habits.map(h => {
@@ -89,6 +100,7 @@ export default function App() {
                     {done ? '✓' : ''}
                   </button>
                   <span className="habit-name">{h.name}</span>
+                  <span className="habit-score">+{h.score || 1}</span>
                   <button className="delete-btn" onClick={() => deleteHabit(h.id)}>✕</button>
                 </li>
               )
@@ -96,9 +108,18 @@ export default function App() {
           </ul>
           <div className="add-row">
             <input
-              placeholder="添加新习惯..."
+              placeholder="习惯名称..."
               value={newName}
               onChange={e => setNewName(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && addHabit()}
+            />
+            <input
+              className="score-input"
+              placeholder="分数"
+              type="number"
+              min="1"
+              value={newScore}
+              onChange={e => setNewScore(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && addHabit()}
             />
             <button onClick={addHabit}>添加</button>
@@ -109,12 +130,17 @@ export default function App() {
       {tab === 'history' && (
         <main>
           {historyDays.length === 0 && <p className="empty">还没有打卡记录</p>}
-          {historyDays.map(({ date, ids }) => (
+          {historyDays.map(({ date, ids, score }) => (
             <div key={date} className="history-card">
-              <p className="history-date">{date}</p>
+              <div className="history-header">
+                <p className="history-date">{date}</p>
+                <span className="history-score">{score} 分</span>
+              </div>
               <div className="chips">
                 {ids.map(id => (
-                  <span key={id} className="chip">✓ {habitMap[id] || '已删除'}</span>
+                  <span key={id} className="chip">
+                    ✓ {habitMap[id]?.name || '已删除'} +{habitMap[id]?.score || 0}
+                  </span>
                 ))}
               </div>
             </div>
