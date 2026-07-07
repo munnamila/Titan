@@ -1,22 +1,32 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+html, body {
+  height: 100%;
+  overscroll-behavior: none;
+}
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   background: #f5f5f5;
   color: #222;
+  -webkit-font-smoothing: antialiased;
 }
 
 .app {
   max-width: 480px;
   margin: 0 auto;
-  min-height: 100vh;
+  min-height: 100dvh;
   background: #fff;
   display: flex;
   flex-direction: column;
 }
 
 header {
-  padding: 20px 16px 0;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  padding: env(safe-area-inset-top, 16px) 16px 0;
+  padding-top: max(env(safe-area-inset-top), 16px);
   background: #fff;
   border-bottom: 1px solid #eee;
 }
@@ -30,18 +40,18 @@ header h1 {
 
 nav {
   display: flex;
-  gap: 0;
 }
 
 nav button {
   flex: 1;
-  padding: 10px;
+  padding: 12px;
   border: none;
   background: none;
   font-size: 15px;
   color: #999;
   cursor: pointer;
   border-bottom: 2px solid transparent;
+  -webkit-tap-highlight-color: transparent;
 }
 
 nav button.active {
@@ -52,14 +62,29 @@ nav button.active {
 
 main {
   flex: 1;
-  padding: 16px;
+  padding: 16px 16px 0;
+  overflow-y: auto;
+  padding-bottom: calc(env(safe-area-inset-bottom) + 80px);
 }
 
 .date {
   text-align: center;
   color: #999;
   font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.score-banner {
+  text-align: center;
+  font-size: 15px;
+  color: #666;
   margin-bottom: 16px;
+}
+
+.score-banner strong {
+  font-size: 24px;
+  color: #4CAF50;
+  margin-left: 6px;
 }
 
 .habit-list {
@@ -67,16 +92,17 @@ main {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
 
 .habit-list li {
   display: flex;
   align-items: center;
   background: #f9f9f9;
-  border-radius: 12px;
-  padding: 14px;
+  border-radius: 14px;
+  padding: 16px 14px;
   gap: 12px;
+  min-height: 60px;
 }
 
 .habit-list li.done .habit-name {
@@ -85,19 +111,20 @@ main {
 }
 
 .check-btn {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   border: 2px solid #ccc;
   background: none;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   color: #fff;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
+  -webkit-tap-highlight-color: transparent;
 }
 
 li.done .check-btn {
@@ -108,44 +135,103 @@ li.done .check-btn {
 .habit-name {
   flex: 1;
   font-size: 16px;
-}
-
-.delete-btn {
-  background: none;
-  border: none;
-  color: #ddd;
-  font-size: 16px;
-  cursor: pointer;
-  padding: 4px;
-}
-
-.delete-btn:hover { color: #f44336; }
-
-.score-banner {
-  text-align: center;
-  font-size: 15px;
-  color: #666;
-  margin-bottom: 16px;
-}
-
-.score-banner strong {
-  font-size: 22px;
-  color: #4CAF50;
-  margin-left: 6px;
+  line-height: 1.3;
 }
 
 .habit-score {
   font-size: 13px;
   color: #4CAF50;
   font-weight: 600;
-  margin-right: 4px;
+  flex-shrink: 0;
 }
 
 li.done .habit-score { color: #aaa; }
 
+.delete-btn {
+  background: none;
+  border: none;
+  color: #ddd;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px 4px 4px 4px;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.edit-btn {
+  background: none;
+  border: none;
+  color: #ccc;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.edit-row {
+  display: flex;
+  gap: 6px;
+  width: 100%;
+  align-items: center;
+}
+
+.edit-name {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid #4CAF50;
+  border-radius: 8px;
+  font-size: 15px;
+  outline: none;
+  min-width: 0;
+}
+
+.edit-score {
+  flex: 0 0 56px;
+  padding: 8px 8px;
+  border: 1px solid #4CAF50;
+  border-radius: 8px;
+  font-size: 15px;
+  outline: none;
+}
+
+.save-btn {
+  padding: 8px 12px;
+  background: #4CAF50;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.cancel-btn {
+  background: none;
+  border: none;
+  color: #bbb;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px;
+  flex-shrink: 0;
+}
+
+/* 底部添加栏固定 */
 .add-row {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 480px;
   display: flex;
   gap: 8px;
+  padding: 12px 16px;
+  padding-bottom: max(env(safe-area-inset-bottom), 12px);
+  background: #fff;
+  border-top: 1px solid #eee;
+  z-index: 10;
 }
 
 .add-row input {
@@ -156,16 +242,17 @@ li.done .habit-score { color: #aaa; }
   font-size: 15px;
   outline: none;
   background: #f9f9f9;
+  min-width: 0;
 }
 
 .add-row input:focus { border-color: #4CAF50; }
 
 .add-row .score-input {
-  flex: 0 0 70px;
+  flex: 0 0 64px;
 }
 
 .add-row button {
-  padding: 12px 18px;
+  padding: 12px 16px;
   background: #4CAF50;
   color: #fff;
   border: none;
@@ -173,40 +260,64 @@ li.done .habit-score { color: #aaa; }
   font-size: 15px;
   font-weight: 600;
   cursor: pointer;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.empty {
+  text-align: center;
+  color: #bbb;
+  margin-top: 60px;
+  font-size: 15px;
+}
+
+.chart-card {
+  background: #f9f9f9;
+  border-radius: 14px;
+  padding: 14px 10px 10px;
+  margin-bottom: 14px;
+}
+
+.chart-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #555;
+  margin-bottom: 8px;
+  padding-left: 4px;
+}
+
+.section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #555;
+  margin: 4px 0 10px 2px;
+}
+
+.history-card {
+  background: #f9f9f9;
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 12px;
 }
 
 .history-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
-}
-
-.history-score {
-  font-weight: 600;
-  color: #4CAF50;
-  font-size: 14px;
-}
-
-.empty {
-  text-align: center;
-  color: #bbb;
-  margin-top: 40px;
-  font-size: 15px;
-}
-
-.history-card {
-  background: #f9f9f9;
-  border-radius: 12px;
-  padding: 14px;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .history-date {
   font-weight: 600;
   font-size: 14px;
-  color: #666;
+  color: #555;
   margin: 0;
+}
+
+.history-score {
+  font-weight: 700;
+  color: #4CAF50;
+  font-size: 14px;
 }
 
 .chips {
@@ -219,6 +330,6 @@ li.done .habit-score { color: #aaa; }
   background: #e8f5e9;
   color: #4CAF50;
   border-radius: 8px;
-  padding: 4px 10px;
+  padding: 5px 10px;
   font-size: 13px;
 }

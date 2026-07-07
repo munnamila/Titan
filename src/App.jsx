@@ -1,7 +1,13 @@
 import { useState, useEffect } from 'react'
+import {
+  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+  PieChart, Pie, Cell, Legend
+} from 'recharts'
 import './App.css'
 
 const TODAY = new Date().toISOString().split('T')[0]
+
+const PIE_COLORS = ['#4CAF50','#2196F3','#FF9800','#E91E63','#9C27B0','#00BCD4','#FF5722','#8BC34A']
 
 function loadData() {
   return {
@@ -9,13 +15,16 @@ function loadData() {
     records: JSON.parse(localStorage.getItem('records') || '{}'),
   }
 }
+function saveHabits(h) { localStorage.setItem('habits', JSON.stringify(h)) }
+function saveRecords(r) { localStorage.setItem('records', JSON.stringify(r)) }
 
-function saveHabits(habits) {
-  localStorage.setItem('habits', JSON.stringify(habits))
-}
-
-function saveRecords(records) {
-  localStorage.setItem('records', JSON.stringify(records))
+// 生成最近 n 天的日期数组
+function lastNDays(n) {
+  return Array.from({ length: n }, (_, i) => {
+    const d = new Date()
+    d.setDate(d.getDate() - (n - 1 - i))
+    return d.toISOString().split('T')[0]
+  })
 }
 
 export default function App() {
@@ -24,6 +33,9 @@ export default function App() {
   const [newName, setNewName] = useState('')
   const [newScore, setNewScore] = useState('')
   const [tab, setTab] = useState('today')
+  const [editingId, setEditingId] = useState(null)
+  const [editName, setEditName] = useState('')
+  const [editScore, setEditScore] = useState('')
 
   useEffect(() => {
     const { habits, records } = loadData()
@@ -32,6 +44,7 @@ export default function App() {
   }, [])
 
   const todayCheckins = records[TODAY] || []
+  const habitMap = Object.fromEntries(habits.map(h => [h.id, h]))
 
   const todayScore = habits
     .filter(h => todayCheckins.includes(h.id))
@@ -39,9 +52,7 @@ export default function App() {
 
   function toggle(id) {
     const current = records[TODAY] || []
-    const updated = current.includes(id)
-      ? current.filter(x => x !== id)
-      : [...current, id]
+    const updated = current.includes(id) ? current.filter(x => x !== id) : [...current, id]
     const newRecords = { ...records, [TODAY]: updated }
     setRecords(newRecords)
     saveRecords(newRecords)
@@ -65,7 +76,21 @@ export default function App() {
     saveHabits(updated)
   }
 
-  const habitMap = Object.fromEntries(habits.map(h => [h.id, h]))
+  function startEdit(h) {
+    setEditingId(h.id)
+    setEditName(h.name)
+    setEditScore(String(h.score || 1))
+  }
+
+  function saveEdit() {
+    const name = editName.trim()
+    const score = parseInt(editScore) || 1
+    if (!name) return
+    const updated = habits.map(h => h.id === editingId ? { ...h, name, score } : h)
+    setHabits(updated)
+    saveHabits(updated)
+    setEditingId(null)
+  }
 
   const historyDays = Object.keys(records)
     .sort((a, b) => b.localeCompare(a))
@@ -75,6 +100,19 @@ export default function App() {
       return { date, ids, score }
     })
     .filter(d => d.ids.length > 0)
+
+  // 折线图数据：近14天每日得分
+  const lineData = lastNDays(14).map(date => {
+    const ids = records[date] || []
+    const score = ids.reduce((sum, id) => sum + (habitMap[id]?.score || 0), 0)
+    return { date: date.slice(5), score } // 显示 MM-DD
+  })
+
+  // 饼图数据：每个习惯的总完成次数
+  const pieData = habits.map(h => ({
+    name: h.name,
+    value: Object.values(records).filter(ids => ids.includes(h.id)).length
+  })).filter(d => d.value > 0)
 
   return (
     <div className="app">
@@ -94,34 +132,32 @@ export default function App() {
             {habits.length === 0 && <li className="empty">还没有打卡项目，添加一个吧</li>}
             {habits.map(h => {
               const done = todayCheckins.includes(h.id)
+              const isEditing = editingId === h.id
               return (
-                <li key={h.id} className={done ? 'done' : ''}>
-                  <button className="check-btn" onClick={() => toggle(h.id)}>
-                    {done ? '✓' : ''}
-                  </button>
-                  <span className="habit-name">{h.name}</span>
-                  <span className="habit-score">+{h.score || 1}</span>
-                  <button className="delete-btn" onClick={() => deleteHabit(h.id)}>✕</button>
+                <li key={h.id} className={done && !isEditing ? 'done' : ''}>
+                  {isEditing ? (
+                    <div className="edit-row">
+                      <input className="edit-name" value={editName} onChange={e => setEditName(e.target.value)} autoFocus />
+                      <input className="edit-score" type="number" min="1" value={editScore} onChange={e => setEditScore(e.target.value)} />
+                      <button className="save-btn" onClick={saveEdit}>保存</button>
+                      <button className="cancel-btn" onClick={() => setEditingId(null)}>✕</button>
+                    </div>
+                  ) : (
+                    <>
+                      <button className="check-btn" onClick={() => toggle(h.id)}>{done ? '✓' : ''}</button>
+                      <span className="habit-name">{h.name}</span>
+                      <span className="habit-score">+{h.score || 1}</span>
+                      <button className="edit-btn" onClick={() => startEdit(h)}>✎</button>
+                      <button className="delete-btn" onClick={() => deleteHabit(h.id)}>✕</button>
+                    </>
+                  )}
                 </li>
               )
             })}
           </ul>
           <div className="add-row">
-            <input
-              placeholder="习惯名称..."
-              value={newName}
-              onChange={e => setNewName(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && addHabit()}
-            />
-            <input
-              className="score-input"
-              placeholder="分数"
-              type="number"
-              min="1"
-              value={newScore}
-              onChange={e => setNewScore(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && addHabit()}
-            />
+            <input placeholder="习惯名称..." value={newName} onChange={e => setNewName(e.target.value)} onKeyDown={e => e.key === 'Enter' && addHabit()} />
+            <input className="score-input" placeholder="分数" type="number" min="1" value={newScore} onChange={e => setNewScore(e.target.value)} onKeyDown={e => e.key === 'Enter' && addHabit()} />
             <button onClick={addHabit}>添加</button>
           </div>
         </main>
@@ -130,21 +166,57 @@ export default function App() {
       {tab === 'history' && (
         <main>
           {historyDays.length === 0 && <p className="empty">还没有打卡记录</p>}
-          {historyDays.map(({ date, ids, score }) => (
-            <div key={date} className="history-card">
-              <div className="history-header">
-                <p className="history-date">{date}</p>
-                <span className="history-score">{score} 分</span>
+
+          {historyDays.length > 0 && (
+            <>
+              {/* 折线图 */}
+              <div className="chart-card">
+                <p className="chart-title">近14天得分</p>
+                <ResponsiveContainer width="100%" height={180}>
+                  <LineChart data={lineData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                    <XAxis dataKey="date" tick={{ fontSize: 11 }} interval={1} />
+                    <YAxis tick={{ fontSize: 11 }} />
+                    <Tooltip />
+                    <Line type="monotone" dataKey="score" stroke="#4CAF50" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} name="得分" />
+                  </LineChart>
+                </ResponsiveContainer>
               </div>
-              <div className="chips">
-                {ids.map(id => (
-                  <span key={id} className="chip">
-                    ✓ {habitMap[id]?.name || '已删除'} +{habitMap[id]?.score || 0}
-                  </span>
-                ))}
-              </div>
-            </div>
-          ))}
+
+              {/* 饼图 */}
+              {pieData.length > 0 && (
+                <div className="chart-card">
+                  <p className="chart-title">习惯完成次数</p>
+                  <ResponsiveContainer width="100%" height={220}>
+                    <PieChart>
+                      <Pie data={pieData} cx="50%" cy="45%" outerRadius={75} dataKey="value" label={({ name, value }) => `${name} ${value}`} labelLine={false}>
+                        {pieData.map((_, i) => (
+                          <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Legend iconSize={10} wrapperStyle={{ fontSize: 12 }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+
+              {/* 列表 */}
+              <p className="section-title">每日明细</p>
+              {historyDays.map(({ date, ids, score }) => (
+                <div key={date} className="history-card">
+                  <div className="history-header">
+                    <p className="history-date">{date}</p>
+                    <span className="history-score">{score} 分</span>
+                  </div>
+                  <div className="chips">
+                    {ids.filter(id => habitMap[id]).map(id => (
+                      <span key={id} className="chip">✓ {habitMap[id].name} +{habitMap[id].score || 1}</span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
         </main>
       )}
     </div>
