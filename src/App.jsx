@@ -1,13 +1,10 @@
 import { useState, useEffect } from 'react'
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
-  PieChart, Pie, Cell, Legend
 } from 'recharts'
 import './App.css'
 
 const TODAY = new Date().toISOString().split('T')[0]
-
-const PIE_COLORS = ['#4CAF50','#2196F3','#FF9800','#E91E63','#9C27B0','#00BCD4','#FF5722','#8BC34A']
 
 function loadData() {
   return {
@@ -18,12 +15,49 @@ function loadData() {
 function saveHabits(h) { localStorage.setItem('habits', JSON.stringify(h)) }
 function saveRecords(r) { localStorage.setItem('records', JSON.stringify(r)) }
 
-// 生成最近 n 天的日期数组
 function lastNDays(n) {
   return Array.from({ length: n }, (_, i) => {
     const d = new Date()
     d.setDate(d.getDate() - (n - 1 - i))
     return d.toISOString().split('T')[0]
+  })
+}
+
+// 按周聚合：返回近 n 周，每周得分总和
+function lastNWeeks(n, records, habitMap) {
+  return Array.from({ length: n }, (_, wi) => {
+    const weekStart = new Date()
+    weekStart.setDate(weekStart.getDate() - (n - 1 - wi) * 7 - weekStart.getDay())
+    const label = `第${n - wi}周前`.replace('第1周前', '本周')
+    let score = 0
+    for (let d = 0; d < 7; d++) {
+      const day = new Date(weekStart)
+      day.setDate(weekStart.getDate() + d)
+      const key = day.toISOString().split('T')[0]
+      const ids = records[key] || []
+      score += ids.reduce((s, id) => s + (habitMap[id]?.score || 0), 0)
+    }
+    return { label, score }
+  })
+}
+
+// 按月聚合：返回近 n 月，每月得分总和
+function lastNMonths(n, records, habitMap) {
+  return Array.from({ length: n }, (_, mi) => {
+    const d = new Date()
+    d.setDate(1)
+    d.setMonth(d.getMonth() - (n - 1 - mi))
+    const year = d.getFullYear()
+    const month = d.getMonth()
+    const label = `${year}-${String(month + 1).padStart(2, '0')}`
+    const daysInMonth = new Date(year, month + 1, 0).getDate()
+    let score = 0
+    for (let day = 1; day <= daysInMonth; day++) {
+      const key = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+      const ids = records[key] || []
+      score += ids.reduce((s, id) => s + (habitMap[id]?.score || 0), 0)
+    }
+    return { label, score }
   })
 }
 
@@ -101,12 +135,16 @@ export default function App() {
     })
     .filter(d => d.ids.length > 0)
 
-  // 折线图数据：近14天每日得分
-  const lineData = lastNDays(14).map(date => {
+  const [chartRange, setChartRange] = useState('day')
+
+  // 折线图数据
+  const lineDataDay = lastNDays(14).map(date => {
     const ids = records[date] || []
     const score = ids.reduce((sum, id) => sum + (habitMap[id]?.score || 0), 0)
-    return { date: date.slice(5), score } // 显示 MM-DD
+    return { label: date.slice(5), score }
   })
+  const lineDataWeek = lastNWeeks(8, records, habitMap)
+  const lineDataMonth = lastNMonths(6, records, habitMap)
 
   // 饼图数据：每个习惯的总完成次数
   const pieData = habits.map(h => ({
@@ -171,34 +209,31 @@ export default function App() {
             <>
               {/* 折线图 */}
               <div className="chart-card">
-                <p className="chart-title">近14天得分</p>
-                <ResponsiveContainer width="100%" height={180}>
-                  <LineChart data={lineData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                <div className="chart-header">
+                  <p className="chart-title">得分趋势</p>
+                  <div className="chart-tabs">
+                    {[['day','14天'],['week','8周'],['month','6月']].map(([key, label]) => (
+                      <button key={key} className={chartRange === key ? 'active' : ''} onClick={() => setChartRange(key)}>{label}</button>
+                    ))}
+                  </div>
+                </div>
+                <ResponsiveContainer width="100%" height={200}>
+                  <LineChart
+                    data={chartRange === 'day' ? lineDataDay : chartRange === 'week' ? lineDataWeek : lineDataMonth}
+                    margin={{ top: 8, right: 8, left: -20, bottom: 0 }}
+                  >
                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                    <XAxis dataKey="date" tick={{ fontSize: 11 }} interval={1} />
+                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                     <YAxis tick={{ fontSize: 11 }} />
                     <Tooltip />
-                    <Line type="monotone" dataKey="score" stroke="#4CAF50" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} name="得分" />
+                    <Line
+                      type="monotone" dataKey="score"
+                      stroke={chartRange === 'day' ? '#4CAF50' : chartRange === 'week' ? '#2196F3' : '#FF9800'}
+                      strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} name="得分"
+                    />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
-
-              {/* 饼图 */}
-              {pieData.length > 0 && (
-                <div className="chart-card">
-                  <p className="chart-title">习惯完成次数</p>
-                  <ResponsiveContainer width="100%" height={220}>
-                    <PieChart>
-                      <Pie data={pieData} cx="50%" cy="45%" outerRadius={75} dataKey="value" label={({ name, value }) => `${name} ${value}`} labelLine={false}>
-                        {pieData.map((_, i) => (
-                          <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Legend iconSize={10} wrapperStyle={{ fontSize: 12 }} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              )}
 
               {/* 列表 */}
               <p className="section-title">每日明细</p>
