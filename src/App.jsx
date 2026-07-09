@@ -4,7 +4,10 @@ import {
 } from 'recharts'
 import './App.css'
 
-const TODAY = new Date().toISOString().split('T')[0]
+function getToday() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 const GROUPS = [
   { key: 'study',   label: '学习', color: '#2196F3', bg: '#e3f2fd', icon: '📚' },
@@ -22,11 +25,15 @@ function loadData() {
 function saveHabits(h) { localStorage.setItem('habits', JSON.stringify(h)) }
 function saveRecords(r) { localStorage.setItem('records', JSON.stringify(r)) }
 
+function dateKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 function lastNDays(n) {
   return Array.from({ length: n }, (_, i) => {
     const d = new Date()
     d.setDate(d.getDate() - (n - 1 - i))
-    return d.toISOString().split('T')[0]
+    return dateKey(d)
   })
 }
 
@@ -39,7 +46,7 @@ function lastNWeeks(n, records, habitMap) {
     for (let d = 0; d < 7; d++) {
       const day = new Date(weekStart)
       day.setDate(weekStart.getDate() + d)
-      const key = day.toISOString().split('T')[0]
+      const key = dateKey(day)
       const ids = records[key] || []
       score += ids.reduce((s, id) => s + (habitMap[id]?.score || 0), 0)
     }
@@ -78,13 +85,23 @@ export default function App() {
   const [editScore, setEditScore] = useState('')
   const [editGroup, setEditGroup] = useState('study')
 
+  const [today, setToday] = useState(getToday)
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const t = getToday()
+      setToday(prev => prev !== t ? t : prev)
+    }, 60_000)
+    return () => clearInterval(timer)
+  }, [])
+
   useEffect(() => {
     const { habits, records } = loadData()
     setHabits(habits)
     setRecords(records)
   }, [])
 
-  const todayCheckins = records[TODAY] || []
+  const todayCheckins = records[today] || []
   const habitMap = Object.fromEntries(habits.map(h => [h.id, h]))
 
   const todayScore = habits
@@ -92,9 +109,9 @@ export default function App() {
     .reduce((sum, h) => sum + (h.score || 0), 0)
 
   function toggle(id) {
-    const current = records[TODAY] || []
+    const current = records[today] || []
     const updated = current.includes(id) ? current.filter(x => x !== id) : [...current, id]
-    const newRecords = { ...records, [TODAY]: updated }
+    const newRecords = { ...records, [today]: updated }
     setRecords(newRecords)
     saveRecords(newRecords)
   }
@@ -165,7 +182,7 @@ export default function App() {
 
       {tab === 'today' && (
         <main>
-          <p className="date">{TODAY}</p>
+          <p className="date">{today}</p>
           <div className="score-banner">今日得分 <strong>{todayScore}</strong></div>
 
           {GROUPS.map(group => {
