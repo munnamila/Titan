@@ -6,6 +6,13 @@ import './App.css'
 
 const TODAY = new Date().toISOString().split('T')[0]
 
+const GROUPS = [
+  { key: 'study',   label: '学习', color: '#2196F3', bg: '#e3f2fd', icon: '📚' },
+  { key: 'life',    label: '生活', color: '#FF9800', bg: '#fff3e0', icon: '🌿' },
+  { key: 'fitness', label: '健身', color: '#F44336', bg: '#fce4ec', icon: '💪' },
+]
+const GROUP_MAP = Object.fromEntries(GROUPS.map(g => [g.key, g]))
+
 function loadData() {
   return {
     habits: JSON.parse(localStorage.getItem('habits') || '[]'),
@@ -23,7 +30,6 @@ function lastNDays(n) {
   })
 }
 
-// 按周聚合：返回近 n 周，每周得分总和
 function lastNWeeks(n, records, habitMap) {
   return Array.from({ length: n }, (_, wi) => {
     const weekStart = new Date()
@@ -41,7 +47,6 @@ function lastNWeeks(n, records, habitMap) {
   })
 }
 
-// 按月聚合：返回近 n 月，每月得分总和
 function lastNMonths(n, records, habitMap) {
   return Array.from({ length: n }, (_, mi) => {
     const d = new Date()
@@ -66,10 +71,12 @@ export default function App() {
   const [records, setRecords] = useState({})
   const [newName, setNewName] = useState('')
   const [newScore, setNewScore] = useState('')
+  const [newGroup, setNewGroup] = useState('study')
   const [tab, setTab] = useState('today')
   const [editingId, setEditingId] = useState(null)
   const [editName, setEditName] = useState('')
   const [editScore, setEditScore] = useState('')
+  const [editGroup, setEditGroup] = useState('study')
 
   useEffect(() => {
     const { habits, records } = loadData()
@@ -96,7 +103,7 @@ export default function App() {
     const name = newName.trim()
     const score = parseInt(newScore) || 1
     if (!name) return
-    const updated = [...habits, { id: Date.now().toString(), name, score }]
+    const updated = [...habits, { id: Date.now().toString(), name, score, group: newGroup }]
     setHabits(updated)
     saveHabits(updated)
     setNewName('')
@@ -114,13 +121,14 @@ export default function App() {
     setEditingId(h.id)
     setEditName(h.name)
     setEditScore(String(h.score || 1))
+    setEditGroup(h.group || 'study')
   }
 
   function saveEdit() {
     const name = editName.trim()
     const score = parseInt(editScore) || 1
     if (!name) return
-    const updated = habits.map(h => h.id === editingId ? { ...h, name, score } : h)
+    const updated = habits.map(h => h.id === editingId ? { ...h, name, score, group: editGroup } : h)
     setHabits(updated)
     saveHabits(updated)
     setEditingId(null)
@@ -137,7 +145,6 @@ export default function App() {
 
   const [chartRange, setChartRange] = useState('day')
 
-  // 折线图数据
   const lineDataDay = lastNDays(14).map(date => {
     const ids = records[date] || []
     const score = ids.reduce((sum, id) => sum + (habitMap[id]?.score || 0), 0)
@@ -145,12 +152,6 @@ export default function App() {
   })
   const lineDataWeek = lastNWeeks(8, records, habitMap)
   const lineDataMonth = lastNMonths(6, records, habitMap)
-
-  // 饼图数据：每个习惯的总完成次数
-  const pieData = habits.map(h => ({
-    name: h.name,
-    value: Object.values(records).filter(ids => ids.includes(h.id)).length
-  })).filter(d => d.value > 0)
 
   return (
     <div className="app">
@@ -166,36 +167,61 @@ export default function App() {
         <main>
           <p className="date">{TODAY}</p>
           <div className="score-banner">今日得分 <strong>{todayScore}</strong></div>
-          <ul className="habit-list">
-            {habits.length === 0 && <li className="empty">还没有打卡项目，添加一个吧</li>}
-            {habits.map(h => {
-              const done = todayCheckins.includes(h.id)
-              const isEditing = editingId === h.id
-              return (
-                <li key={h.id} className={done && !isEditing ? 'done' : ''}>
-                  {isEditing ? (
-                    <div className="edit-row">
-                      <input className="edit-name" value={editName} onChange={e => setEditName(e.target.value)} autoFocus />
-                      <input className="edit-score" type="number" min="1" value={editScore} onChange={e => setEditScore(e.target.value)} />
-                      <button className="save-btn" onClick={saveEdit}>保存</button>
-                      <button className="cancel-btn" onClick={() => setEditingId(null)}>✕</button>
-                    </div>
-                  ) : (
-                    <>
-                      <button className="check-btn" onClick={() => toggle(h.id)}>{done ? '✓' : ''}</button>
-                      <span className="habit-name">{h.name}</span>
-                      <span className="habit-score">+{h.score || 1}</span>
-                      <button className="edit-btn" onClick={() => startEdit(h)}>✎</button>
-                      <button className="delete-btn" onClick={() => deleteHabit(h.id)}>✕</button>
-                    </>
+
+          {GROUPS.map(group => {
+            const groupHabits = habits.filter(h => (h.group || 'study') === group.key)
+            return (
+              <div key={group.key} className="group-section">
+                <div className="group-header" style={{ color: group.color }}>
+                  <span className="group-icon">{group.icon}</span>
+                  <span className="group-label">{group.label}</span>
+                  <span className="group-count">
+                    {groupHabits.filter(h => todayCheckins.includes(h.id)).length}/{groupHabits.length}
+                  </span>
+                </div>
+                <ul className="habit-list">
+                  {groupHabits.length === 0 && (
+                    <li className="empty-group">暂无项目</li>
                   )}
-                </li>
-              )
-            })}
-          </ul>
+                  {groupHabits.map(h => {
+                    const done = todayCheckins.includes(h.id)
+                    const isEditing = editingId === h.id
+                    const g = GROUP_MAP[h.group || 'study']
+                    return (
+                      <li key={h.id} className={done && !isEditing ? 'done' : ''} style={{ '--group-color': g.color, '--group-bg': g.bg }}>
+                        {isEditing ? (
+                          <div className="edit-row">
+                            <input className="edit-name" value={editName} onChange={e => setEditName(e.target.value)} autoFocus />
+                            <input className="edit-score" type="number" min="1" value={editScore} onChange={e => setEditScore(e.target.value)} />
+                            <select className="edit-group" value={editGroup} onChange={e => setEditGroup(e.target.value)}>
+                              {GROUPS.map(g => <option key={g.key} value={g.key}>{g.icon} {g.label}</option>)}
+                            </select>
+                            <button className="save-btn" onClick={saveEdit}>保存</button>
+                            <button className="cancel-btn" onClick={() => setEditingId(null)}>✕</button>
+                          </div>
+                        ) : (
+                          <>
+                            <button className="check-btn" onClick={() => toggle(h.id)}>{done ? '✓' : ''}</button>
+                            <span className="habit-name">{h.name}</span>
+                            <span className="habit-score">+{h.score || 1}</span>
+                            <button className="edit-btn" onClick={() => startEdit(h)}>✎</button>
+                            <button className="delete-btn" onClick={() => deleteHabit(h.id)}>✕</button>
+                          </>
+                        )}
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
+            )
+          })}
+
           <div className="add-row">
             <input placeholder="习惯名称..." value={newName} onChange={e => setNewName(e.target.value)} onKeyDown={e => e.key === 'Enter' && addHabit()} />
-            <input className="score-input" placeholder="分数" type="number" min="1" value={newScore} onChange={e => setNewScore(e.target.value)} onKeyDown={e => e.key === 'Enter' && addHabit()} />
+            <input className="score-input" placeholder="分" type="number" min="1" value={newScore} onChange={e => setNewScore(e.target.value)} onKeyDown={e => e.key === 'Enter' && addHabit()} />
+            <select className="group-select" value={newGroup} onChange={e => setNewGroup(e.target.value)}>
+              {GROUPS.map(g => <option key={g.key} value={g.key}>{g.icon}</option>)}
+            </select>
             <button onClick={addHabit}>添加</button>
           </div>
         </main>
@@ -207,7 +233,6 @@ export default function App() {
 
           {historyDays.length > 0 && (
             <>
-              {/* 折线图 */}
               <div className="chart-card">
                 <div className="chart-header">
                   <p className="chart-title">得分趋势</p>
@@ -235,7 +260,6 @@ export default function App() {
                 </ResponsiveContainer>
               </div>
 
-              {/* 列表 */}
               <p className="section-title">每日明细</p>
               {historyDays.map(({ date, ids, score }) => (
                 <div key={date} className="history-card">
@@ -244,9 +268,14 @@ export default function App() {
                     <span className="history-score">{score} 分</span>
                   </div>
                   <div className="chips">
-                    {ids.filter(id => habitMap[id]).map(id => (
-                      <span key={id} className="chip">✓ {habitMap[id].name} +{habitMap[id].score || 1}</span>
-                    ))}
+                    {ids.filter(id => habitMap[id]).map(id => {
+                      const g = GROUP_MAP[habitMap[id].group || 'study']
+                      return (
+                        <span key={id} className="chip" style={{ background: g.bg, color: g.color }}>
+                          ✓ {habitMap[id].name} +{habitMap[id].score || 1}
+                        </span>
+                      )
+                    })}
                   </div>
                 </div>
               ))}
